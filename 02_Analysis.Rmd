@@ -1,0 +1,1272 @@
+---
+title: "07b_analysis"
+author: "Sglatt"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r packages}
+if (!require("survival")) {
+  install.packages("survival")
+  require("survival")
+}
+if (!require("survminer")) {
+  install.packages("survminer")
+  require("survminer")
+}
+if (!require("ggfortify")) {
+  install.packages("ggfortify")
+  require("ggfortify")
+}
+if (!require("dplyr")) {
+  install.packages("dplyr")
+  require("dplyr")
+}
+if (!require("psych")) {
+  install.packages("psych")
+  require("psych")
+}
+if (!require("pscl")) {
+  install.packages("pscl")
+  require("pscl")
+}
+if (!require("readxl")) {
+  install.packages("readxl")
+  require("readxl")
+}
+if (!require("pROC")) {
+  install.packages("pROC")
+  require("pROC")
+}
+if (!require("sjPlot")) {
+  install.packages("sjPlot")
+  require("sjPlot")
+}
+if (!require("extrafont")) {
+  install.packages("extrafont")
+  require("extrafont")
+}
+# font_import(prompt = FALSE)
+# loadfonts(device = "win")
+# fonts()
+```
+
+# Import the dataset created in 01_Data
+```{r data and dir, eval=FALSE}
+events_filtered <- read.csv("01_Output/Events_data_SG_2025-06-15.csv")
+
+# Folder to save the output
+dir.create("02_Output")
+```
+
+# Suicide descriptives for the sample
+```{r describe}
+# How many people had actual lifetime attempts?
+events_filtered %>%
+  count(cssrs_actattlt_bl, name = "Count", sort = FALSE) %>%
+  mutate(Percent = round(100 * Count / sum(Count), 1))
+
+# How many people had lifetime actual, aborted, and/or interrupted attempts?
+events_filtered %>%
+  count(attempt_lifetime, name = "Count", sort = FALSE) %>%
+  mutate(Percent = round(100 * Count / sum(Count), 1))
+
+# How many people had recent actual, aborted, and/or interrupted?
+events_filtered %>%
+  count(attempt_recent, name = "Count", sort = FALSE) %>%
+  mutate(Percent = round(100 * Count / sum(Count), 1))
+
+# How much baseline ideation did people have?
+events_filtered %>%
+  count(q06_ssi, name = "Count", sort = FALSE) %>%
+  mutate(Percent = round(100 * Count / sum(Count), 1))
+
+# How many people perceived access to method and opportunity for suicide?
+events_filtered %>%
+  count(q13_ssi, name = "Count", sort = FALSE) %>%
+  mutate(Percent = round(100 * Count / sum(Count), 1))
+
+# How many people prepared for suicide?
+events_filtered %>%
+  count(q16_ssi, name = "Count", sort = FALSE) %>%
+  mutate(Percent = round(100 * Count / sum(Count), 1))
+
+# How many people were in a high-risk hopeless group (9+)?
+events_filtered %>%
+  count(bhs_9, name = "Count", sort = FALSE) %>%
+  mutate(Percent = round(100 * Count / sum(Count), 1))
+
+# How many people had an attempt over the study period?
+## Remove people who died with no emergent suicide attempt
+## & people with < 340 days and no emergent suicide attempt
+events_filtered_3 %>%
+  count(att1_365, name = "Count", sort = FALSE) %>%
+  mutate(Percent = round(100 * Count / sum(Count), 1))
+
+table(events_filtered$att1_365)
+table(events_filtered$natts_365 > 0)
+
+# How many people more than 1 attempt over the study period?
+## Remove people who died with no emergent suicide attempt and with an emergent suicide attempt(s)
+events_filtered_2 %>%
+  count(natts_365 > 1, name = "Count", sort = FALSE) %>%
+  mutate(Percent = round(100 * Count / sum(Count), 1))
+
+# What was the range of recurrence?
+table(events_filtered$natts_365)
+
+# How many people expected a future suicide attempt?
+events_filtered %>%
+  count(q15_ssi, name = "Count", sort = FALSE) %>%
+  mutate(Percent = round(100 * Count / sum(Count), 1))
+
+# How many people who expected a future suicide attempt had an emergent attempt over the study?
+## Remove people who died with no emergent suicide attempt
+## & people with < 340 days and no emergent suicide attempt
+
+events_filtered_3 %>%
+  count(q15_ssi, att1_365) %>%
+  group_by(q15_ssi) %>%
+  mutate(
+    Percent = round(100 * n / sum(n), 1)
+  ) %>%
+  ungroup()
+
+# Of the people who concretely expected to have/not have a suicide attempt, how many were *accurate*?
+
+# Make an accuracy variable
+events_filtered_3 <- events_filtered_3 %>%
+  mutate(accuracy = case_when(
+    q15_ssi == 0 & att1_365 == 0 ~ 1, # 1 if people expect not to make a suicide attempt and did not have one
+    q15_ssi == 0 & att1_365 == 1 ~ 0, # 0 if people expect not to make a suicide attempt and did have one
+    q15_ssi == 2 & att1_365 == 1 ~ 1, # 1 if people expect to make a suicide attempt and did have one
+    q15_ssi == 2 & att1_365 == 0 ~ 0, # 0 if people expect to make a suicide attempt and did not have one
+    TRUE ~ NA_real_
+  ))
+
+events_filtered_3[events_filtered_3$q15_ssi != 1, ] %>%
+  count(q15_ssi_2, att1_365) %>%
+  group_by(q15_ssi_2) %>%
+  mutate(
+    Percent = round(100 * n / sum(n), 1)
+  ) %>%
+  ungroup()
+
+# Excluding everyone < 365 days
+# Make an accuracy variable
+events_filtered_4 <- events_filtered_4 %>%
+  mutate(accuracy = case_when(
+    q15_ssi == 0 & att1_365 == 0 ~ 1, # 1 if people expect not to make a suicide attempt and did not have one
+    q15_ssi == 0 & att1_365 == 1 ~ 0, # 0 if people expect not to make a suicide attempt and did have one
+    q15_ssi == 2 & att1_365 == 1 ~ 1, # 1 if people expect to make a suicide attempt and did have one
+    q15_ssi == 2 & att1_365 == 0 ~ 0, # 0 if people expect to make a suicide attempt and did not have one
+    TRUE ~ NA_real_
+  ))
+
+events_filtered_4[events_filtered_4$q15_ssi != 1, ] %>%
+  count(q15_ssi_2, att1_365) %>%
+  group_by(q15_ssi_2) %>%
+  mutate(
+    Percent = round(100 * n / sum(n), 1)
+  ) %>%
+  ungroup()
+```
+
+# Time to event descriptives?
+```{r time to event}
+# What was the mean time to first attempt?
+## Remove people who died with no emergent suicide attempt
+## & people with < 340 days and no emergent suicide attempt
+
+summary(events_filtered_3[events_filtered_3$att1_365 == 1, ]$surv_365)
+sd(events_filtered_3[events_filtered_3$att1_365 == 1, ]$surv_365)
+table(events_filtered_3[events_filtered_3$att1_365 == 1, ]$surv_365)
+nrow(events_filtered_3[events_filtered_3$att1_365 == 1, ])
+
+
+# What was the mean time to first attempt when self-rated expectation == yes?
+summary(events_filtered_3[events_filtered_3$att1_365 == 1 & events_filtered_3$q15_ssi_2 == 1, ]$surv_365)
+sd(events_filtered_3[events_filtered_3$att1_365 == 1 & events_filtered_3$q15_ssi_2 == 1, ]$surv_365)
+nrow(events_filtered_3[events_filtered_3$att1_365 == 1 & events_filtered_3$q15_ssi_2 == 1, ])
+
+# What was the mean time to first attempt when self-rated expectation == no/unsure?
+summary(events_filtered_3[events_filtered_3$att1_365 == 1 & events_filtered_3$q15_ssi_2 == 0, ]$surv_365)
+sd(events_filtered_3[events_filtered_3$att1_365 == 1 & events_filtered_3$q15_ssi_2 == 0, ]$surv_365)
+nrow(events_filtered_3[events_filtered_3$att1_365 == 1 & events_filtered_3$q15_ssi_2 == 0, ]$surv_365)
+```
+
+# Identify covariates with tests between emergent suicide attempt (absence vs. presence)
+```{r cov}
+## Remove people who died with no emergent suicide attempt
+cov_1 <- fisher.test(events_filtered_1$att1_365, events_filtered_1$sex_demo)
+cov_2 <- chisq.test(events_filtered_1$att1_365, events_filtered_1$race_demo)
+cov_3 <- fisher.test(events_filtered_1$att1_365, events_filtered_1$latino_demo)
+cov_4 <- chisq.test(events_filtered_1$att1_365, events_filtered_1$degree_demo)
+cov_5a <- fisher.test(events_filtered_1$att1_365, events_filtered_1$prison_recoded)
+cov_5b <- chisq.test(events_filtered_1$att1_365, events_filtered_1$prison_recoded)
+cov_6 <- fisher.test(events_filtered_1$att1_365, events_filtered_1$prior_demo)
+cov_7 <- chisq.test(events_filtered_1$att1_365, events_filtered_1$employ_demo)
+
+report::report(cov_1)
+report::report(cov_2)
+report::report(cov_3)
+report::report(cov_4)
+report::report(cov_5b)
+cov_5b$expected
+cov_5b
+report::report(cov_6)
+report::report(cov_7)
+
+cov_8 <- t.test(age_demo ~ att1_365, data = events_filtered_1)
+
+report::report(cov_8)
+
+# Look at a table of the significant covariate (justice involvement)
+events_filtered_1 %>%
+  count(att1_365, prison_recoded) %>%
+  group_by(att1_365) %>%
+  mutate(
+    Percent = round(100 * n / sum(n), 1)
+  ) %>%
+  ungroup()
+
+table(events_filtered_1$prison_recoded)
+```
+
+# Does a past-year attempt discern by emergent attempt?
+```{r chi recent emergent}
+## Remove people who died with no emergent suicide attempt
+## & People with < 340 days and no emergent suicide attempt
+
+chi_1 <- chisq.test(
+  events_filtered_3$att1_365, # Suicide emergence (presence vs absence)
+  events_filtered_3$attempt_recent # Recent suicide attempt (presence vs absence)
+)
+report::report(chi_1)
+
+# Make a table
+sjPlot::tab_xtab(
+  var.row = events_filtered_3$att1_365,
+  var.col = events_filtered_3$attempt_recent,
+  title = "Contingency Table",
+  show.row.prc = TRUE,
+  show.col.prc = TRUE,
+  show.summary = TRUE,
+  statistics = "pearson",
+  show.exp = TRUE,
+  show.legend = TRUE,
+  file = paste0("02_Output/Contingency_recent_emergent_", Sys.Date(), ".doc")
+)
+```
+
+# Does perceived access to method and oppurtunity for suicide discern by emergent attempt?
+```{r chi access emergent}
+## Remove people who died with no emergent suicide attempt
+## & People with < 340 days and no emergent suicide attempt
+
+chi_2a <- chisq.test(
+  events_filtered_3$att1_365, # Suicide emergence (presence vs absence)
+  events_filtered_3$q13_ssi_2 # Perceived access to method/opportunity for suicide (no method and/or opportunity vs. yes)
+)
+report::report(chi_2a)
+chi_2a
+chi_2b <- chisq.test(
+  events_filtered_3$att1_365, # Suicide emergence (presence vs absence)
+  events_filtered_3$q13_ssi_3 # Perceived access to method/opportunity for suicide (no method vs. yes method and/or opportunity)
+)
+report::report(chi_2b)
+
+# Make a table
+sjPlot::tab_xtab(
+  var.row = events_filtered_3$att1_365,
+  var.col = events_filtered_3$q13_ssi_2,
+  title = "Contingency Table",
+  show.row.prc = TRUE,
+  show.col.prc = TRUE,
+  show.summary = TRUE,
+  statistics = "pearson",
+  show.exp = TRUE,
+  show.legend = TRUE,
+  file = paste0("02_Output/Contingency_access_emergent_", Sys.Date(), ".doc")
+)
+```
+
+# Does self-rated expectation for suicide predict discern by emergent attempt?
+```{r chi expect emergent}
+## Remove people who died with no emergent suicide attempt
+## & People with < 340 days and no emergent suicide attempt
+
+chi_3 <- chisq.test(
+  events_filtered_3$att1_365, # Suicide emergence (presence vs absence)
+  events_filtered_3$q15_ssi_2 # Self-rated expectation (no/unsure vs. sure)
+)
+report::report(chi_3)
+
+sjPlot::tab_xtab(
+  var.row = events_filtered_3$att1_365,
+  var.col = events_filtered_3$q15_ssi_2,
+  title = "Contingency Table",
+  show.row.prc = TRUE,
+  show.col.prc = TRUE,
+  show.summary = TRUE,
+  statistics = "pearson",
+  show.exp = TRUE,
+  show.legend = TRUE,
+  file = paste0("02_Output/Contingency_expect_emergent_", Sys.Date(), ".doc")
+)
+```
+
+# Does baseline hopelessness discern by emergent attempt?
+```{r chi expect emergent}
+## Remove people who died with no emergent suicide attempt
+## & People with < 340 days and no emergent suicide attempt
+
+# Sum score
+jmv::ttestIS(
+  formula = bhs ~ # Hopelessness
+    att1_365, # Suicide emergence (presence vs absence)
+  data = events_filtered_3,
+  vars = vars(bhs),
+  welchs = TRUE,
+  mann = TRUE,
+  norm = TRUE,
+  eqv = TRUE,
+  meanDiff = TRUE,
+  effectSize = TRUE,
+  desc = TRUE
+)
+
+wilcox.test(bhs ~ att1_365, data = events_filtered_3)
+
+# Dichotomous
+chi_4 <- chisq.test(
+  events_filtered_3$bhs_9,
+  events_filtered_3$att1_365 # Self-rated expectation (no/unsure vs. sure)
+)
+report::report(chi_4)
+
+# Make a table
+sjPlot::tab_xtab(
+  var.row = events_filtered_3$att1_365,
+  var.col = events_filtered_3$bhs_9,
+  title = "Contingency Table",
+  show.row.prc = TRUE,
+  show.col.prc = TRUE,
+  show.summary = TRUE,
+  statistics = "pearson",
+  show.exp = TRUE,
+  show.legend = TRUE,
+  file = paste0("02_Output/Contingency_hope_emergent_", Sys.Date(), ".doc")
+)
+```
+
+# Does preparation for suicide discern by emergent attempt?
+```{r prep emergent}
+## Remove people who died with no emergent suicide attempt
+## & People with < 340 days and no emergent suicide attempt
+
+chi_4 <- chisq.test(
+  events_filtered_3$att1_365, # Suicide emergence (presence vs absence)
+  events_filtered_3$q16_ssi_2 # preparation (none vs. some/finished)
+)
+report::report(chi_4)
+
+sjPlot::tab_xtab(
+  var.row = events_filtered_3$att1_365,
+  var.col = events_filtered_3$q16_ssi_2,
+  title = "Contingency Table",
+  show.row.prc = TRUE,
+  show.col.prc = TRUE,
+  show.summary = TRUE,
+  statistics = "pearson",
+  show.exp = TRUE,
+  show.legend = TRUE,
+  file = paste0("02_Output/Contingency_prep_emergent_", Sys.Date(), ".doc")
+)
+```
+
+```{r logit access}
+logit_access_1 <- glm(
+  q15_ssi_2 ~
+    factor(bhs_9) +
+    factor(attempt_recent) +
+    factor(q13_ssi_2) +
+    factor(q16_ssi_2),
+  data = events_filtered,
+  family = binomial()
+)
+
+summary(logit_access_1)
+```
+
+# Does expectation predict emergence (0 vs any)?
+```{r logit emergent}
+# Baseline predictors
+logit_1a <- glm(
+  att1_365 ~
+    factor(arm_rec) + # Randomization condition
+    factor(q15_ssi_2), # Self-rated expectation
+  data = events_filtered_1,
+  family = binomial()
+)
+
+# Adjust for recent suicidal behavior
+logit_2a <- glm(
+  att1_365 ~
+    factor(arm_rec) +
+    factor(q15_ssi_2) +
+    (attempt_recent == 1), # Recent suicidal behavior
+  data = events_filtered_1,
+  family = binomial()
+)
+
+# Adjust for suicidal ideation
+logit_3a <- glm(
+  att1_365 ~
+    factor(arm_rec) +
+    factor(q15_ssi_2) +
+    factor(q06_ssi),
+  data = events_filtered_1,
+  family = binomial()
+)
+
+# Adjust perceived access to method/opportunity for suicide
+logit_4a <- glm(
+  att1_365 ~
+    factor(arm_rec) +
+    factor(q15_ssi_2) +
+    factor(q13_ssi_2),
+  data = events_filtered_1,
+  family = binomial()
+)
+
+# Adjust preparation for suicide
+logit_5a <- glm(
+  att1_365 ~
+    factor(arm_rec) +
+    factor(q15_ssi_2) +
+    factor(q16_ssi_2),
+  data = events_filtered_1,
+  family = binomial()
+)
+
+# Adjust hopelessness - sum score
+logit_6a1 <- glm(
+  att1_365 ~
+    factor(arm_rec) +
+    factor(q15_ssi_2) +
+    bhs,
+  data = events_filtered_1,
+  family = binomial()
+)
+
+# Adjust hopelessness - binary
+logit_6a2 <- glm(
+  att1_365 ~
+    factor(arm_rec) +
+    factor(q15_ssi_2) +
+    factor(bhs_9),
+  data = events_filtered_1,
+  family = binomial()
+)
+
+logit_6a3 <- glm(
+  att1_365 ~
+    factor(arm_rec) +
+    bhs,
+  data = events_filtered_1,
+  family = binomial()
+)
+
+# Initial model
+summary(logit_1a)
+
+# Adjusting for past-year suicidal behavior
+summary(logit_2a)
+
+# Adjusting for suicidal thoughts
+summary(logit_3a)
+
+# Adjusting for perceived access
+summary(logit_4a)
+
+# Adjusting for preparation for suicide
+summary(logit_5a)
+
+# Adjusting for hopelessness
+summary(logit_6a1) # Sum score
+summary(logit_6a2) # binary score
+summary(logit_6a3) # Only hopelessness
+```
+
+# -- ROC curves
+```{r roc}
+models <- list(
+  logit_1a,
+  logit_2a,
+  logit_3a,
+  logit_4a,
+  logit_5a,
+  logit_6a1,
+  logit_6a2
+)
+
+model_names <- c(
+  "logit_1a",
+  "logit_2a",
+  "logit_3a",
+  "logit_4a",
+  "logit_5a",
+  "logit_6a1",
+  "logit_6a2"
+)
+
+roc_list <- list()
+auc_values <- numeric(length(models))
+auc_cis <- matrix(NA, nrow = length(models), ncol = 3)
+colnames(auc_cis) <- c("l", "AUC", "u")
+rownames(auc_cis) <- model_names
+
+for (i in seq_along(models)) {
+  pred_probs <- predict(models[[i]], type = "response")
+  roc_obj <- roc(events_filtered_1$att1_365, pred_probs, ci = TRUE)
+  roc_list[[model_names[i]]] <- roc_obj
+  auc_values[i] <- auc(roc_obj)
+  auc_ci <- ci.auc(roc_obj)
+  auc_cis[i, ] <- auc_ci
+  plot(roc_obj, main = paste("ROC Curve for", model_names[i]))
+  cat(sprintf(
+    "AUC for %s: %.3f (95%% CI: %.3f - %.3f)\n",
+    model_names[i], auc_values[i], auc_ci[1], auc_ci[3]
+  ))
+}
+
+auc_summary <- as.data.frame(auc_cis)
+auc_summary
+```
+
+# Does expectation predict time to event?
+```{r survival mods}
+# Use full dataset
+
+# Initial model
+cox_1a <- coxph(
+  Surv(surv_365, att1_365) ~
+    factor(arm_rec) + # Randomization condition
+    factor(q15_ssi_2), # Self rated expectation
+  data = events_filtered
+)
+
+# Adjust for suicide behavior
+cox_2a <- coxph(
+  Surv(surv_365, att1_365) ~
+    factor(arm_rec) + # Randomization condition
+    factor(q15_ssi_2) + # Self rated expectation
+    (attempt_recent == 1), # Recent suicidal behavior
+  data = events_filtered
+)
+
+# Adjust for suicidal ideation
+cox_3a <- coxph(
+  Surv(surv_365, att1_365) ~
+    factor(arm_rec) + # Randomization condition
+    factor(q15_ssi_2) + # Self rated expectation
+    factor(q06_ssi), # Suicidal ideation - brief, moderate, long
+  data = events_filtered
+)
+
+# Adjust for perceived access to method and opportunity for suicide
+cox_4a <- coxph(
+  Surv(surv_365, att1_365) ~
+    factor(arm_rec) + # Randomization condition
+    factor(q15_ssi_2) + # Self rated expectation
+    factor(q13_ssi_2), # Perceived access to method/opportunity for suicide
+  data = events_filtered
+)
+
+# Adjust for preparation for suicide
+cox_5a <- coxph(
+  Surv(surv_365, att1_365) ~
+    factor(arm_rec) + # Randomization condition
+    factor(q15_ssi_2) + # Self rated expectation
+    factor(q16_ssi_2), # Preparation
+  data = events_filtered
+)
+
+# Adjust for hopelessness - sum score
+cox_6a1 <- coxph(
+  Surv(surv_365, att1_365) ~
+    factor(arm_rec) + # Randomization condition
+    factor(q15_ssi_2) + # Self rated expectation
+    bhs, # hopelessness sum
+  data = events_filtered
+)
+
+# Binary item
+cox_6a2 <- coxph(
+  Surv(surv_365, att1_365) ~
+    factor(arm_rec) + # Randomization condition
+    factor(q15_ssi_2) + # Self rated expectation
+    factor(bhs_9), # hopelessness binary
+  data = events_filtered
+)
+
+# Just hopelessness binary
+cox_6a3 <- coxph(
+  Surv(surv_365, att1_365) ~
+    factor(arm_rec) + # Randomization condition
+    factor(bhs_9), # hopelessness binary
+  data = events_filtered
+)
+
+# Just hopelessness sum
+cox_6a4 <- coxph(
+  Surv(surv_365, att1_365) ~
+    factor(arm_rec) + # Randomization condition
+    bhs,
+  data = events_filtered
+)
+
+summary(cox_1a)
+
+# Adjusting for past-year suicidal behavior
+summary(cox_2a)
+
+# Adjusting for suicidal thoughts
+summary(cox_3a)
+
+# Adjusting for perceived access
+summary(cox_4a)
+
+# Adjusting for preparation for suicide
+summary(cox_5a)
+
+# Adjusting for hopelessness
+summary(cox_6a1) # Sum score
+summary(cox_6a2) # Binary score
+
+# Test for improvements from the initial model -+- covariates
+anova(cox_1a, cox_2a)
+anova(cox_1a, cox_3a)
+anova(cox_1a, cox_4a)
+anova(cox_1a, cox_5a)
+anova(cox_1a, cox_6a1)
+anova(cox_1a, cox_6a2)
+anova(cox_6a3, cox_6a2)
+
+
+# Proportional hazards assumption
+cox.zph(cox_1a)
+cox.zph(cox_2a)
+cox.zph(cox_3a)
+cox.zph(cox_4a)
+cox.zph(cox_5a)
+cox.zph(cox_6a1)
+cox.zph(cox_6a2)
+
+# Summed hopelessness in model 5a violated the proportional hazards assumption.
+# Re-fit the model with an hopelessness*time interaction
+
+# Adjust for hopelessness with a time interaction
+cox_6b1 <- coxph(
+  Surv(surv_365, att1_365) ~
+    factor(arm_rec) + # Randomization condition
+    factor(q15_ssi_2) + # Self rated expectation
+    bhs + # hopelessness
+    tt(bhs), # hopelessness x time
+  data = events_filtered,
+  tt = function(x, t, ...) x * t # Define the time function for cox
+)
+
+summary(cox_6b1)
+```
+
+# Survival curve figure
+```{r survival fig }
+events_filtered <- events_filtered %>%
+  mutate(q15_ssi_label = factor(q15_ssi_2, levels = c(0, 1), labels = c("No/Unsure", "Yes")))
+
+cox_1a_fit <- survfit(Surv(surv_365, att1_365) ~ q15_ssi_label, data = events_filtered)
+
+tiff(paste0("02_Output/Survival_plot_", format(Sys.Date(), "%Y-%m-%d"), ".tiff"), units = "in", width = 8, height = 5, res = 300)
+
+autoplot(
+  cox_1a_fit,
+  conf.int = FALSE,
+  censor.shape = "*",
+  censor.size = 5,
+  surv.size = 1.1,
+  facets = TRUE,
+  ncol = 2
+) +
+  labs(
+    x = "Time to suicide attempt",
+    y = "Survival",
+    color = "Expectation of a future suicide attempt"
+  ) +
+  coord_cartesian(ylim = c(0.25, 1)) +
+  theme_minimal(base_size = 14, base_family = "Times New Roman") +
+  theme(
+    panel.grid.major = element_line(color = "grey90"),
+    panel.grid.minor = element_line(color = "grey95"),
+    panel.background = element_rect(fill = "white"),
+    strip.background = element_rect(fill = "white"),
+    legend.position = "bottom"
+  )
+dev.off()
+```
+
+# Do people with recent behavior anticipate having suicidal behavior at higher rates?
+```{r chi recent expect}
+# With the full sample
+chi_5a <- chisq.test(
+  events_filtered$q15_ssi_2, # Self-rated expectation (no/unsure vs. sure)
+  events_filtered$attempt_recent
+) # recent suicide attempt (presence vs. absence)
+report::report(chi_5a)
+
+# Make sure chi is appropriate
+chi_5a$expected
+
+# only with the people who made concrete expectations (exclude "unsure" expectations)
+chi_5b <- chisq.test(
+  x = events_filtered[events_filtered$q15_ssi != 1, ]$q15_ssi_2, # Self-rated expectation (unsure vs. sure)
+  y = events_filtered[events_filtered$q15_ssi != 1, ]$attempt_recent # recent suicide attempt (presence vs. absence)
+)
+report::report(chi_5b)
+chi_5b$expected
+
+# How many in the sample with concrete expectations had an emergent suicidal behavior?
+table(events_filtered[events_filtered$q15_ssi != 1, ]$attempt_recent)
+
+# Make tables
+# -- full sample
+sjPlot::tab_xtab(
+  var.row = events_filtered$q15_ssi_2,
+  var.col = events_filtered$attempt_recent,
+  title = "Contingency Table",
+  show.row.prc = TRUE,
+  show.col.prc = TRUE,
+  show.summary = TRUE,
+  statistics = "pearson",
+  show.exp = TRUE,
+  show.legend = TRUE,
+  file = paste0("02_Output/Contingency_full_recent_expect_", Sys.Date(), ".doc")
+)
+
+# -- subsample
+sjPlot::tab_xtab(
+  var.row = events_filtered[events_filtered$q15_ssi != 1, ]$q15_ssi_2,
+  var.col = events_filtered[events_filtered$q15_ssi != 1, ]$attempt_recent,
+  title = "Contingency Table",
+  show.row.prc = TRUE,
+  show.col.prc = TRUE,
+  show.summary = TRUE,
+  statistics = "pearson",
+  show.exp = TRUE,
+  show.legend = TRUE,
+  file = paste0("02_Output/Contingency_sub_recent_expect_", Sys.Date(), ".doc")
+)
+```
+
+# Do people with method/opportunty anticipate having suicidal behavior at higher rates?
+```{r chi access expect}
+# with the full sample
+chi_6a <- chisq.test(
+  events_filtered$q15_ssi_2, # Self-rated expectation (no/unsure vs. sure)
+  events_filtered$q13_ssi_2
+) # Perceived access to method/opportunity for suicide (no method and/or opportunity vs. yes)
+report::report(chi_6a)
+chi_6a$expected
+
+# only with the people who made concrete expectations (exclude "unsure" expectations)
+chi_6b <- chisq.test(
+  x = events_filtered[events_filtered$q15_ssi != 1, ]$q15_ssi_2, # Self-rated expectation (unsure vs. sure)
+  y = events_filtered_1[events_filtered_1$q15_ssi != 1, ]$q13_ssi_2 # Perceived access to method/opportunity for suicide (no method and/or opportunity vs. yes)
+)
+chi_6b
+chi_6b$expected # Make sure chi is appropriate
+
+# How many in the sample with concrete expectations percieved access to method and opportunity for suicide
+table(events_filtered_1[events_filtered_1$q15_ssi != 1, ]$q13_ssi_2)
+
+# Make tables
+# -- full sample
+sjPlot::tab_xtab(
+  var.row = events_filtered$q15_ssi_2,
+  var.col = events_filtered$q13_ssi_2,
+  title = "Contingency Table",
+  show.row.prc = TRUE,
+  show.col.prc = TRUE,
+  show.summary = TRUE,
+  statistics = "pearson",
+  show.exp = TRUE,
+  show.legend = TRUE,
+  file = paste0("02_Output/Contingency_full_access_expect_", Sys.Date(), ".doc")
+)
+
+# -- subsample
+sjPlot::tab_xtab(
+  var.row = events_filtered[events_filtered$q15_ssi != 1, ]$q15_ssi_2,
+  var.col = events_filtered[events_filtered$q15_ssi != 1, ]$q13_ssi_2,
+  title = "Contingency Table",
+  show.row.prc = TRUE,
+  show.col.prc = TRUE,
+  show.summary = TRUE,
+  statistics = "pearson",
+  show.exp = TRUE,
+  show.legend = TRUE,
+  file = paste0("02_Output/Contingency_sub_access_expect_", Sys.Date(), ".doc")
+)
+```
+
+# Do people with prep for suicide anticipate having suicidal behavior at higher rates?
+```{r chi prep expect}
+# with the full sample
+chi_7a <- chisq.test(
+  events_filtered$q15_ssi_2, # Self-rated expectation (no/unsure vs. sure)
+  events_filtered$q16_ssi_2 # preparation for suicide (no vs. some/completed-finished)
+)
+report::report(chi_7a)
+chi_7a$expected
+
+# Make tables
+# -- full sample
+sjPlot::tab_xtab(
+  var.row = events_filtered$q15_ssi_2,
+  var.col = events_filtered$q16_ssi_2,
+  title = "Contingency Table",
+  show.row.prc = TRUE,
+  show.col.prc = TRUE,
+  show.summary = TRUE,
+  statistics = "pearson",
+  show.exp = TRUE,
+  show.legend = TRUE,
+  file = paste0("02_Output/Contingency_full_prep_expect_", Sys.Date(), ".doc")
+)
+```
+
+# Are people who anticipate suicidal behavior (vs unsure/no) more hopeless?
+```{r t t chi hope expect}
+# Full sample, continuous score
+jmv::ttestIS(
+  formula = bhs ~ q15_ssi_2,
+  data = events_filtered,
+  vars = vars(bhs),
+  welchs = TRUE,
+  mann = TRUE,
+  norm = TRUE,
+  eqv = TRUE,
+  meanDiff = TRUE,
+  effectSize = TRUE,
+  desc = TRUE
+)
+
+wilcox.test(bhs ~ q15_ssi_2, data = events_filtered)
+
+# Full sample, binary item
+chi_8a <- chisq.test(
+  events_filtered$q15_ssi_2, # Self-rated expectation (no/unsure vs. sure)
+  events_filtered$bhs_9
+) # Perceived access to method/opportunity for suicide (no method and/or opportunity vs. yes)
+report::report(chi_8a)
+chi_8a$expected
+
+# only with the people who made concrete expectations (exclude "unsure" expectations)
+# Sum score
+jmv::ttestIS(
+  formula = bhs ~ q15_ssi_2,
+  data = events_filtered[events_filtered$q15_ssi != 1, ],
+  vars = vars(bhs),
+  welchs = TRUE,
+  mann = TRUE,
+  norm = TRUE,
+  eqv = TRUE,
+  meanDiff = TRUE,
+  effectSize = TRUE,
+  desc = TRUE
+)
+
+wilcox.test(bhs ~ q15_ssi_2, data = events_filtered, subset = !is.na(accuracy))
+
+# binary item
+chi_8b <- chisq.test(
+  events_filtered[events_filtered$q15_ssi != 1, ]$q15_ssi_2, # Self-rated expectation (no/unsure vs. sure)
+  events_filtered[events_filtered$q15_ssi != 1, ]$bhs_9
+)
+report::report(chi_8b)
+chi_8b$expected
+
+# Make tables
+# -- full sample
+sjPlot::tab_xtab(
+  var.row = events_filtered$q15_ssi_2,
+  var.col = events_filtered$bhs_9,
+  title = "Contingency Table",
+  show.row.prc = TRUE,
+  show.col.prc = TRUE,
+  show.summary = TRUE,
+  statistics = "pearson",
+  show.exp = TRUE,
+  show.legend = TRUE,
+  file = paste0("02_Output/Contingency_full_hope_expect_", Sys.Date(), ".doc")
+)
+
+# -- subsample
+sjPlot::tab_xtab(
+  var.row = events_filtered[events_filtered$q15_ssi != 1, ]$q15_ssi_2,
+  var.col = events_filtered[events_filtered$q15_ssi != 1, ]$bhs_9,
+  title = "Contingency Table",
+  show.row.prc = TRUE,
+  show.col.prc = TRUE,
+  show.summary = TRUE,
+  statistics = "pearson",
+  show.exp = TRUE,
+  show.legend = TRUE,
+  file = paste0("02_Output/Contingency_sub_hope_expect_", Sys.Date(), ".doc")
+)
+```
+
+# Do people with recent behavior have more *accurate* predictions?
+```{r chi recent accuracy}
+# How many people did and did not expect a suicide concretely?
+table(
+  events_filtered_1$q15_ssi, # Self-rated expectations
+  events_filtered_1$attempt_recent
+) # Recent suicidal behaviors
+
+# How many of those concrete expectations were accurate?
+table(
+  events_filtered$q15_ssi, # Self-rated expectations
+  events_filtered$accuracy
+) # Accuracy of self-rated expectations
+
+# How many people in the sample with concrete expectations had recent suicidal behavior?
+table(events_filtered[!is.na(events_filtered$accuracy), ]$attempt_recent)
+
+chi_9 <- chisq.test(
+  events_filtered$accuracy, # Accuracy of self-rated expectations (yes vs. no)
+  events_filtered$attempt_recent
+) # Recent suicidal behavior (presence vs. absence)
+report::report(chi_9)
+
+chi_9$expected # Make sure chi is appropriate
+
+sjPlot::tab_xtab(
+  var.row = events_filtered[events_filtered$q15_ssi != 1, ]$accuracy,
+  var.col = events_filtered[events_filtered$q15_ssi != 1, ]$attempt_recent,
+  title = "Contingency Table",
+  show.row.prc = TRUE,
+  show.col.prc = TRUE,
+  show.summary = TRUE,
+  statistics = "pearson",
+  show.exp = TRUE,
+  show.legend = TRUE,
+  file = paste0("02_Output/Contingency_recent_accuracy_", Sys.Date(), ".doc")
+)
+```
+
+# Do people with access to method/oppurtunity have more *accurate* predictions?
+```{r chi access accuracy}
+chi_10 <- chisq.test(
+  events_filtered$accuracy, # Accuracy of self-rated expectations (yes vs. no)
+  events_filtered$q13_ssi_2
+) # Perceived access to method/opportunity for suicide (no method and/or opportunity vs. yes)
+report::report(chi_10)
+chi_10$expected # Make sure chi is appropriate
+
+# Table of accuract and perceived access
+events_filtered[events_filtered$q15_ssi != 1, ] %>%
+  count(accuracy, q13_ssi_2) %>%
+  group_by(accuracy) %>%
+  mutate(
+    Percent = round(100 * n / sum(n), 1)
+  ) %>%
+  ungroup()
+
+sjPlot::tab_xtab(
+  var.row = events_filtered[events_filtered$q15_ssi != 1, ]$accuracy,
+  var.col = events_filtered[events_filtered$q15_ssi != 1, ]$q13_ssi_2,
+  title = "Contingency Table",
+  show.row.prc = TRUE,
+  show.col.prc = TRUE,
+  show.summary = TRUE,
+  statistics = "pearson",
+  show.exp = TRUE,
+  show.legend = TRUE,
+  file = paste0("02_Output/Contingency_access_accuracy_", Sys.Date(), ".doc")
+)
+```
+
+# Are people who are more hopeless have more *accurate* predictions?
+```{r t chi hopelessness accuracy}
+# Sum score
+jmv::ttestIS(
+  formula = bhs ~ accuracy,
+  data = events_filtered,
+  vars = vars(bhs),
+  welchs = TRUE,
+  mann = TRUE,
+  norm = TRUE,
+  eqv = TRUE,
+  meanDiff = TRUE,
+  effectSize = TRUE,
+  desc = TRUE
+)
+
+wilcox.test(bhs ~ accuracy, data = events_filtered, subset = !is.na(accuracy))
+
+# Binary item
+table(
+  events_filtered$accuracy, # Accuracy of self-rated expectations (yes vs. no)
+  events_filtered$bhs_9 # Binary hopelessness
+)
+
+chi_11 <- chisq.test(
+  events_filtered$accuracy, # Accuracy of self-rated expectations (yes vs. no)
+  events_filtered$bhs_9 # Binary hopelessness
+)
+report::report(chi_11)
+chi_11$expected # Make sure chi is appropriate
+
+sjPlot::tab_xtab(
+  var.row = events_filtered[events_filtered$q15_ssi != 1, ]$accuracy,
+  var.col = events_filtered[events_filtered$q15_ssi != 1, ]$bhs_9,
+  title = "Contingency Table",
+  show.row.prc = TRUE,
+  show.col.prc = TRUE,
+  show.summary = TRUE,
+  statistics = "pearson",
+  show.exp = TRUE,
+  show.legend = TRUE,
+  file = paste0("02_Output/Contingency_hope_accuracy_", Sys.Date(), ".doc")
+)
+```
+
+# Do people with preparation for suicide have more *accurate* predictions?
+```{r chi prep accuracy}
+chi_12 <- chisq.test(
+  events_filtered$accuracy, # Accuracy of self-rated expectations (yes vs. no)
+  events_filtered$q16_ssi_2 # Binary hopelessness
+)
+report::report(chi_12)
+chi_12$expected # Make sure chi is appropriate
+
+# Table of accuracy and perceived access
+events_filtered[events_filtered$q15_ssi != 1, ] %>%
+  count(accuracy, q16_ssi_2) %>%
+  group_by(accuracy) %>%
+  mutate(
+    Percent = round(100 * n / sum(n), 1)
+  ) %>%
+  ungroup()
+
+sjPlot::tab_xtab(
+  var.row = events_filtered[events_filtered$q15_ssi != 1, ]$accuracy,
+  var.col = events_filtered[events_filtered$q15_ssi != 1, ]$q16_ssi_2,
+  title = "Contingency Table",
+  show.row.prc = TRUE,
+  show.col.prc = TRUE,
+  show.summary = TRUE,
+  statistics = "pearson",
+  show.exp = TRUE,
+  show.legend = TRUE,
+  file = paste0("02_Output/Contingency_prep_accuracy_", Sys.Date(), ".doc")
+)
+```
+
+# Does recent suicidal behavior relate to actual suicidal behavior in the subsample with accurate predictions?
+```{r chi recent emergent}
+chi_13 <- chisq.test(
+  events_filtered[events_filtered$accuracy == 1, ]$att1_365,
+  events_filtered[events_filtered$accuracy == 1, ]$attempt_recent
+)
+report::report(chi_13)
+chi_13$expected
+
+fisher_13 <- fisher.test(
+  events_filtered[events_filtered$accuracy == 1, ]$att1_365,
+  events_filtered[events_filtered$accuracy == 1, ]$attempt_recent
+)
+fisher_13
+```
+
+# Among who do not expect to attempt suicide, does recent suicidal behavior distinguish between those who do versus don’t engage in suicidal behavior?
+```{r}
+chi_14 <- chisq.test(
+  events_filtered[events_filtered$q15_ssi_2 == 0, ]$att1_365,
+  events_filtered[events_filtered$q15_ssi_2 == 0, ]$q13_ssi_2
+)
+chi_14
+chi_14$observed
+```
+
+
+# Woodpile 
+
+# Does self-rated expectation predict presence of an emergent suicide attempt (and recurrence among people with one)
+```{r hurdle mods}
+## Remove people who died with no emergent suicide attempt and with an emergent suicide attempt(s)
+
+# baseline predictors
+hurdle_1a <- hurdle(
+  natts_365 ~
+    factor(arm_rec) + # Randomization condition
+    factor(q15_ssi_2), # Self-rated expectation
+  data = events_filtered_1,
+  dist = "negbin"
+)
+
+# Adjust for recent suicidal behavior
+hurdle_2a <- hurdle(
+  natts_365 ~
+    factor(arm_rec) +
+    factor(q15_ssi_2) +
+    factor(attempt_recent), # Recent suicidal behavior
+  data = events_filtered_1,
+  dist = "negbin"
+)
+
+# Adjust for suicidal ideation
+hurdle_3a <- hurdle(
+  natts_365 ~
+    factor(arm_rec) +
+    factor(q15_ssi_2) +
+    factor(q06_ssi),
+  data = events_filtered_1,
+  dist = "negbin"
+)
+
+# Adjust perceived access to method/opportunity for suicide
+hurdle_4a <- hurdle(
+  natts_365 ~
+    factor(arm_rec) +
+    factor(q15_ssi_2) +
+    factor(q13_ssi_2),
+  data = events_filtered_1,
+  dist = "negbin"
+)
+
+# Adjust hopelessness
+hurdle_5a <- hurdle(
+  natts_365 ~
+    factor(arm_rec) +
+    factor(q15_ssi_2) +
+    bhs,
+  data = events_filtered_1,
+  dist = "negbin"
+)
+
+# Initial model
+summary(hurdle_1a)
+
+# Adjusting for past-year suicidal behavior
+summary(hurdle_2a)
+
+# Adjusting for suicidal thoughts
+summary(hurdle_3a)
+
+# Adjusting for perceived access
+summary(hurdle_4a)
+
+# Adjusting for hopelessness
+summary(hurdle_5a)
+```
+
+# Does expectation predict overall frequency?
+```{r zin}
+## Remove people who died with no emergent suicide attempt and with an emergent suicide attempt(s)
+
+# Check for overdisperson (variance > mean)
+mean(events_filtered_2$natts_365, na.rm = TRUE)
+var(events_filtered_2$natts_365, na.rm = TRUE)
+
+# Fit a Poisson GLM for formal dispersion test
+poisson_model <- glm(
+  natts_365 ~ factor(q15_ssi_2),
+  family = poisson,
+  data = events_filtered_2
+)
+
+dispersiontest(poisson_model)
+
+# Test if a zero-inflated negative binomial is better then negative binomial
+nb_model <- MASS::glm.nb(
+  natts_365 ~
+    factor(q15_ssi_2),
+  data = events_filtered_2
+)
+
+zinb_model <- zeroinfl(
+  natts_365 ~
+    factor(q15_ssi_2) | 1,
+  dist = "negbin",
+  data = events_filtered_2
+)
+
+AIC(nb_model, zinb_model)
+BIC(nb_model, zinb_model)
+
+# Initial model
+nb_model_1a <- MASS::glm.nb(
+  natts_365 ~
+    factor(q15_ssi_2) + # Self-rated expectation
+    factor(arm_rec), # Treatment condition
+  data = events_filtered_2
+)
+
+# Adjust for past-year suicidal behavior
+nb_model_2a <- MASS::glm.nb(
+  natts_365 ~
+    factor(q15_ssi_2) + # Self-rated expectation
+    factor(arm_rec) + # Treatment condition
+    factor(attempt_recent), # Recent suicidal behavior
+  data = events_filtered_2
+)
+
+# Adjust for suicidal ideation
+nb_model_3a <- MASS::glm.nb(
+  natts_365 ~
+    factor(q15_ssi_2) + # Self-rated expectation
+    factor(arm_rec) + # Treatment condition
+    factor(q06_ssi), # Suicidal ideation - brief, moderate, long
+  data = events_filtered_2
+)
+
+# Adjust for perceived access to method and opportunity for suicide
+nb_model_4a <- MASS::glm.nb(
+  natts_365 ~
+    factor(q15_ssi_2) + # Self-rated expectation
+    factor(arm_rec) + # Treatment condition
+    factor(q13_ssi_2), # Perceived access to suicide methods/opportunity
+  data = events_filtered_2
+)
+
+# Adjust for hopelessness
+nb_model_5a <- MASS::glm.nb(
+  natts_365 ~
+    factor(q15_ssi_2) + # Self-rated expectation
+    factor(arm_rec) + # Treatment condition
+    bhs,
+  data = events_filtered_2
+)
+
+# Initial model
+summary(nb_model_1a)
+
+# Adjusting for past-year suicidal behavior
+summary(nb_model_2a)
+
+# Adjusting for suicidal thoughts
+summary(nb_model_3a)
+
+# Adjusting for perceived access
+summary(nb_model_4a)
+
+# Adjusting for hopelessness
+summary(nb_model_5a)
+```
