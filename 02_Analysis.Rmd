@@ -41,7 +41,7 @@ if (!require("extrafont")) {
 
 # Import the dataset created in 01_Data
 ```{r data and dir, eval=FALSE}
-events_filtered <- read.csv("01_Output/Events_data_SG_2025-06-20.csv")
+events_filtered <- read.csv("01_Output/Events_data_SG_2025-10-05.csv")
 
 # Folder to save the output
 # dir.create("02_Output")
@@ -64,6 +64,11 @@ events_filtered %>%
   count(attempt_recent, name = "Count", sort = FALSE) %>%
   mutate(Percent = round(100 * Count / sum(Count), 1))
 
+# What was the range of lifetime actual, aborted, and interrupted behaviors (total across all of them)?
+events_filtered %>%
+  count(total_behaviors_lifetime, name = "Count", sort = FALSE) %>%
+  mutate(Percent = round(100 * Count / sum(Count), 1))
+
 # How much baseline ideation did people have?
 events_filtered %>%
   count(q06_ssi, name = "Count", sort = FALSE) %>%
@@ -79,11 +84,6 @@ events_filtered %>%
   count(q16_ssi, name = "Count", sort = FALSE) %>%
   mutate(Percent = round(100 * Count / sum(Count), 1))
 
-# How many people were in a high-risk hopeless group (9+)?
-events_filtered %>%
-  count(bhs_9, name = "Count", sort = FALSE) %>%
-  mutate(Percent = round(100 * Count / sum(Count), 1))
-
 # How many people had an attempt over the study period?
 ## For this statistic, remove people who died with no emergent suicide attempt
 ## & people with < 340 days and no emergent suicide attempt
@@ -96,7 +96,7 @@ table(events_filtered$natts_365 > 0)
 
 # How many people had more than 1 attempt over the study period?
 ## For this statistic, remove people who died with no emergent suicide attempt
-## & people who doed with an emergent suicide attempt(s)
+## & people who died with an emergent suicide attempt(s)
 events_filtered_2 %>%
   count(natts_365 > 1, name = "Count", sort = FALSE) %>%
   mutate(Percent = round(100 * Count / sum(Count), 1))
@@ -310,6 +310,7 @@ sjPlot::tab_xtab(
 )
 ```
 
+
 # Are people who anticipate suicidal behavior (vs unsure/no) more hopeless?
 ```{r t t chi hope expect}
 # Full score
@@ -466,6 +467,25 @@ cox_6a <- coxph(
   data = events_filtered
 )
 
+# kitchen sink model
+cox_7a <- coxph(
+  Surv(
+    surv_365, # Time-to-event, truncated at 365 days
+    att1_365
+  ) ~ # First suicidal behavior
+    factor(arm_rec) + # Randomization condition
+    factor(q15_ssi_2) + # Self rated expectation of a future suicide attempt (no/unsure vs. yes)
+    srcs17 + # Sucide Related Coping Scale sum score
+    bhs + # hopelessness sum
+    factor(q16_ssi_2) + # Preparation (no vs. some or full prep)
+    factor(q13_ssi_2) + # Perceived access to method/opportunity for suicide (no access to method and/or opp. vs. yes)
+    (attempt_recent == 1) + # Recent suicidal behavior (no vs yes)
+    factor(cssrs_actattrec_bl) + # actual attempt lifetime
+    bdi,
+  data = events_filtered
+)
+summary(cox_7a)
+
 # Main
 summary(cox_1a)
 
@@ -485,6 +505,7 @@ summary(cox_5a3) # Negative sum score
 
 # Adjusting for percieved suicide-related coping
 summary(cox_6a)
+
 
 # Test for improvements from the initial model with the covariates
 anova(cox_1a, cox_2a) # Initial vs. recent suicidal behavior
@@ -557,7 +578,7 @@ tiff(paste0("02_Output/Survival_plot_", format(Sys.Date(), "%Y-%m-%d"), ".tiff")
   units = "in", width = 8, height = 5, res = 300
 )
 
-autoplot(
+curves <- autoplot(
   cox_1a_fit,
   conf.int = FALSE,
   censor.shape = "*",
@@ -580,6 +601,10 @@ autoplot(
     strip.background = element_rect(fill = "white"),
     legend.position = "bottom"
   )
+
 dev.off()
+
+curves
 ```
+
 

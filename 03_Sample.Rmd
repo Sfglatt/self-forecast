@@ -1,0 +1,273 @@
+---
+title: "03_Sample"
+author: "Sglatt"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Import the dataset created in 01_Data
+```{r data and dir, eval=FALSE}
+events_filtered <- read.csv("01_Output/Events_data_SG_2025-10-05.csv")
+```
+
+# Demographic info
+```{r demos}
+expecty_demos <- events_filtered %>%
+  filter(q15_ssi == 2)
+
+expectn_demos <- events_filtered %>%
+  filter(q15_ssi < 2)
+
+demo_vars <- c(
+  "sex_demo", "race_demo", "degree_demo", "employ_demo",
+  "marry_demo", "treat_demo", "support_demo", "kids_demo",
+  "alone_demo", "prior_demo", "prison_demo", "access_demo",
+  "latino_demo"
+)
+
+# Full sample
+for (demo_var in demo_vars) {
+  cat("\n###", demo_var, "###\n")
+  tbl <- table(events_filtered[[demo_var]])
+  print(tbl)
+  cat("\ %  of 126:\n")
+  print(round(100 * tbl / 126, 2))
+}
+
+# Expects SA
+for (demo_var in demo_vars) {
+  cat("\n###", demo_var, "###\n")
+  tbl <- table(expecty_demos[[demo_var]])
+  print(tbl)
+  cat("\ %  of 19:\n")
+  print(round(100 * tbl / 19, 2))
+}
+
+# No/unsure SA
+for (demo_var in demo_vars) {
+  cat("\n###", demo_var, "###\n")
+  tbl <- table(expectn_demos[[demo_var]])
+  print(tbl)
+  cat("\ %  of 107:\n")
+  print(round(100 * tbl / 107, 2))
+}
+
+# Age
+summary(events_filtered[events_filtered$month == 0, ]$age_demo)
+sd(events_filtered[events_filtered$month == 0, ]$age_demo, na.rm = TRUE)
+sum(!is.na(events_filtered[events_filtered$month == 0, ]$age_demo))
+
+table(events_filtered$bpd)
+```
+
+# MINI diagnoses
+```{r mini}
+mini_vars <- c(
+  "when01c_mini", "when01p_mini", "when01r_mini",
+  "mini03_mini", "mini06_mini"
+)
+
+# Full sample
+for (mini_var in mini_vars) {
+  cat("\n###", mini_var, "###\n")
+  tbl <- table(events_filtered[[mini_var]])
+  print(tbl)
+  cat("\ % /126:\n")
+  print(round(100 * tbl / 126, 2))
+}
+
+# Expects an SA
+for (mini_var in mini_vars) {
+  cat("\n###", mini_var, "###\n")
+  tbl <- table(expecty_demos[[mini_var]])
+  print(tbl)
+  cat("\ % /19:\n")
+  print(round(100 * tbl / 19, 2))
+}
+
+# Doesn't expect an SA
+for (mini_var in mini_vars) {
+  cat("\n###", mini_var, "###\n")
+  tbl <- table(expectn_demos[[mini_var]])
+  print(tbl)
+  cat("\ % /107:\n")
+  print(round(100 * tbl / 107, 2))
+}
+```
+
+# Suicidal behavior
+```{r suicide}
+# Aborted lifetime
+events_filtered %>%
+  group_by(q15_ssi_2, cssrs_abtattlt_bl) %>%
+  count(name = "Count") %>%
+  group_by(q15_ssi_2) %>%
+  mutate(Percent = round(100 * Count / sum(Count), 2)) %>%
+  ungroup()
+
+# Interrupted lifetime
+events_filtered %>%
+  group_by(q15_ssi_2, cssrs_intattlt_bl) %>%
+  count(name = "Count") %>%
+  group_by(q15_ssi_2) %>%
+  mutate(Percent = round(100 * Count / sum(Count), 2)) %>%
+  ungroup()
+
+# Actual lifetime
+events_filtered %>%
+  group_by(q15_ssi_2, cssrs_actattlt_bl) %>%
+  count(name = "Count") %>%
+  group_by(q15_ssi_2) %>%
+  mutate(Percent = round(100 * Count / sum(Count), 2)) %>%
+  ungroup()
+
+# Any lifetime (composite)
+events_filtered %>%
+  group_by(q15_ssi_2, attempt_lifetime) %>%
+  count(name = "Count") %>%
+  group_by(q15_ssi_2) %>%
+  mutate(Percent = round(100 * Count / sum(Count), 2)) %>%
+  ungroup()
+
+# Aborted recent
+events_filtered %>%
+  group_by(q15_ssi_2, cssrs_abtattrec_bl) %>%
+  count(name = "Count") %>%
+  group_by(q15_ssi_2) %>%
+  mutate(Percent = round(100 * Count / sum(Count), 2)) %>%
+  ungroup()
+
+# Interrupted recent
+events_filtered %>%
+  group_by(q15_ssi_2, cssrs_intattrec_bl) %>%
+  count(name = "Count") %>%
+  group_by(q15_ssi_2) %>%
+  mutate(Percent = round(100 * Count / sum(Count), 2)) %>%
+  ungroup()
+
+# Actual recent
+events_filtered %>%
+  group_by(q15_ssi_2, cssrs_actattrec_bl) %>%
+  count(name = "Count") %>%
+  group_by(q15_ssi_2) %>%
+  mutate(Percent = round(100 * Count / sum(Count), 2)) %>%
+  ungroup()
+
+# Any recent (composite)
+events_filtered %>%
+  group_by(q15_ssi_2, attempt_recent) %>%
+  count(name = "Count") %>%
+  group_by(q15_ssi_2) %>%
+  mutate(Percent = round(100 * Count / sum(Count), 2)) %>%
+  ungroup()
+
+# How many lifetime behaviors in total
+table(events_filtered$total_behaviors_lifetime)
+table(events_filtered$attempt_lifetime) # one person has a lifetime coded, but no lifetime behaviors in total coded...?
+summary(events_filtered$total_behaviors_lifetime)
+DescTools::Mode(events_filtered$total_behaviors_lifetime, na.rm = FALSE)
+
+events_filtered %>%
+  group_by(q15_ssi_2, total_behaviors_lifetime) %>%
+  count(name = "Count") %>%
+  group_by(q15_ssi_2) %>%
+  mutate(Percent = round(100 * Count / sum(Count), 2)) %>%
+  ungroup()
+
+```
+
+# MSI-BPD demos
+```{r demo msi}
+# Threshold
+events_filtered %>%
+  group_by(q15_ssi_2, bpd) %>%
+  count(name = "Count") %>%
+  group_by(q15_ssi_2) %>%
+  mutate(Percent = round(100 * Count / sum(Count), 2)) %>%
+  ungroup()
+
+# Number of symptoms
+events_filtered %>%
+  group_by(q15_ssi_2, msibpd) %>%
+  count(name = "Count") %>%
+  group_by(q15_ssi_2) %>%
+  mutate(Percent = round(100 * Count / sum(Count), 2)) %>%
+  ungroup()
+```
+
+# Psychiatric comorbidity
+```{r demo comorbid}
+# Variable for MDD + GAD + PTSD
+events_filtered <- events_filtered %>%
+  mutate(
+    all_three_mini_dx = if_else(
+      when01c_mini == 1 & mini03_mini == 1 & mini06_mini == 1,
+      1, 0, missing = NA_real_
+    )
+  )
+
+# Variable for MDD + GAD + PTSD + BPD symptoms
+events_filtered <- events_filtered %>%
+  mutate(
+    all_four_dx = if_else(
+      when01c_mini == 1 & mini03_mini == 1 & mini06_mini == 1 & bpd == 1,
+      1, 0, missing = NA_real_
+    )
+  )
+
+# How many people have MDE (current) + GAD + PTSD?
+events_filtered %>%
+  group_by(q15_ssi_2, all_three_mini_dx) %>%
+  count(name = "Count") %>%
+  group_by(q15_ssi_2) %>%
+  mutate(Percent = round(100 * Count / sum(Count), 2)) %>%
+  ungroup()
+
+# How many people have MDE (current) + GAD + PTSD + BPD symptoms?
+events_filtered %>%
+  group_by(q15_ssi_2, all_four_dx) %>%
+  count(name = "Count") %>%
+  group_by(q15_ssi_2) %>%
+  mutate(Percent = round(100 * Count / sum(Count), 2)) %>%
+  ungroup()
+
+# How many people have MDE (current), GAD, PTSD, and/or BPD symptoms?
+events_filtered <- events_filtered %>%
+  mutate(
+    num_dx_1 = rowSums(across(c(when01c_mini, mini03_mini, mini06_mini, bpd), ~ . == 1)),
+    two_of_four_dx = if_else(
+      if_any(c(when01c_mini, mini03_mini, mini06_mini, bpd), is.na),
+      NA_real_,
+      if_else(num_dx_1 >= 2, 1, 0)
+    )
+  )
+
+events_filtered %>%
+  group_by(q15_ssi_2, two_of_four_dx) %>%
+  count(name = "Count") %>%
+  group_by(q15_ssi_2) %>%
+  mutate(Percent = round(100 * Count / sum(Count), 2)) %>%
+  ungroup()
+
+# How many people have MDE (current), GAD, and/or PTSD?
+events_filtered <- events_filtered %>%
+  mutate(
+    num_dx_2 = rowSums(across(c(when01c_mini, mini03_mini, mini06_mini), ~ . == 1)),
+    two_of_three_dx = if_else(
+      if_any(c(when01c_mini, mini03_mini, mini06_mini), is.na),
+      NA_real_,
+      if_else(num_dx_2 >= 2, 1, 0)
+    )
+  )
+
+events_filtered %>%
+  group_by(q15_ssi_2, two_of_three_dx) %>%
+  count(name = "Count") %>%
+  group_by(q15_ssi_2) %>%
+  mutate(Percent = round(100 * Count / sum(Count), 2)) %>%
+  ungroup()
+```

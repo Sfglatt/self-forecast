@@ -27,17 +27,23 @@ if (!require("stringr")) {
   install.packages("stringr")
   require("stringr")
 }
+if (!require("tidyverse")) {
+  install.packages("tidyverse")
+  require("tidyverse")
+}
 ```
 
 # Folder for the output
 ```{r eval=FALSE}
-dir.create("01_Output")
+if (!dir.exists("01_Output")) {
+  dir.create("01_Output")
+}
 ```
 
 # First, the master database with suicide attempts over the year
 ```{r master data}
 # Raw data in separate tabs
-path <- "~/Labs/Github/Project_life_force/Project_Life_Force/Raw_datasets/database_12-29-2024.xlsx"
+path <- "~/Labs/Github/project-life-force/project-life-force/Raw_datasets/database_12-29-2024.xlsx"
 excel_sheets(path)
 
 # This tab has suicide attempt data
@@ -52,8 +58,8 @@ events$dtdied <- statusdat$dtdied[match(events$id, statusdat$id)]
 # Baseline C-SSRS data (lifetime and recent)
 ```{r cssrs data}
 # Import C-SSRS data
-cssrs_labels <- read.csv("~/Labs/Github/Project_life_force/Project_Life_Force/Raw_datasets/CSSRS_Baseline_Recent_Labels.csv")
-cssrs_raw <- read.csv("~/Labs/Github/Project_life_force/Project_Life_Force/Raw_datasets/CSSRS_Baseline_Recent_Raw.csv")
+cssrs_labels <- read.csv("~/Labs/Github/project-life-force/project-life-force/Raw_datasets/CSSRS_Baseline_Recent_Labels.csv")
+cssrs_raw <- read.csv("~/Labs/Github/project-life-force/project-life-force/Raw_datasets/CSSRS_Baseline_Recent_Raw.csv")
 
 # Fix the IDs
 cssrs_raw <- cssrs_raw %>%
@@ -127,20 +133,58 @@ cssrs_raw_filtered <- cssrs_raw_filtered %>%
     )
   )
 
-# Add the lifetime variable into the suicide attempt data sheet
-events$attempt_lifetime <- cssrs_raw_filtered$attempt_lifetime[match(events$id, cssrs_raw_filtered$id)]
+# For number of lifetime behaviors,
+# cssrs_accattnumlt_bl = number of lifetime actual attempts
+# cssrs_intattnumlt_bl = number of lifetime interrupted attempts
+# cssrs_abtattnumlt_bl = number of lifetime aborted attempts
 
-# Add the recent variable into the suicide attempt data sheet
-events$attempt_recent <- cssrs_raw_filtered$attempt_recent[match(events$id, cssrs_raw_filtered$id)]
+# Sum them for a 'total number of lifetime behaviors' variable
+cssrs_raw_filtered <- cssrs_raw_filtered %>%
+  mutate(total_behaviors_lifetime = rowSums(
+    dplyr::select(
+      .,
+      cssrs_accattnumlt_bl,
+      cssrs_intattnumlt_bl,
+      cssrs_abtattnumlt_bl
+    ) %>% mutate(across(everything(), as.numeric)),
+    na.rm = TRUE
+  )) %>%
+  mutate(total_behaviors_lifetime = ifelse(
+    is.na(cssrs_accattnumlt_bl) & is.na(cssrs_intattnumlt_bl) & is.na(cssrs_abtattnumlt_bl),
+    NA,
+    total_behaviors_lifetime
+  ))
 
-table(events_filtered$attempt_recent)
-# 59 vs 67
+table(cssrs_raw_filtered$total_behaviors_lifetime)
+
+# Add the cssrs attempt items to events
+events <- events %>%
+  left_join(
+    cssrs_raw_filtered %>%
+      select(
+        id,
+        cssrs_actattrec_bl, cssrs_intattrec_bl, cssrs_abtattrec_bl,
+        cssrs_actattlt_bl, cssrs_intattlt_bl, cssrs_abtattlt_bl,
+        attempt_recent, attempt_lifetime, cssrs_sblt_bl,
+        cssrs_accattnumlt_bl, cssrs_intattnumlt_bl, cssrs_abtattnumlt_bl, total_behaviors_lifetime
+      ),
+    by = "id"
+  )
+
+events %>%
+  select(
+    cssrs_actattlt_bl,
+    cssrs_intattlt_bl,
+    cssrs_abtattlt_bl,
+    attempt_lifetime,
+    cssrs_sblt_bl
+  )
 ```
 
 # Baseline report
 ```{r events}
 # Self-report data for all participants at all waves
-plf_data <- read.csv("~/Labs/Github/Project_life_force/Project_Life_Force/01_Created_datasets/Merged_plf_data_filtered_2025-04-09.csv")
+plf_data <- read.csv("~/Labs/Github/project-life-force/project-life-force/01_Created_datasets/Merged_plf_data_filtered_2025-04-09.csv")
 
 # Add baseline self-report variables to the suicide attempt data (events)
 
@@ -208,47 +252,8 @@ plf_data_baseline <- plf_data_baseline %>%
     ), na.rm = FALSE)
   )
 
-# From this dataset, add variables to the events dataset
-# Treatment condition
-events$arm_rec <- plf_data_baseline$arm_rec[match(events$id, plf_data_baseline$id)]
-
-# BHS scores (total, negative expectations, and positive expectations)
-events$bhs <- plf_data_baseline$bhs[match(events$id, plf_data_baseline$id)]
-events$bhs_pos <- plf_data_baseline$bhs_pos[match(events$id, plf_data_baseline$id)]
-events$bhs_neg <- plf_data_baseline$bhs_neg[match(events$id, plf_data_baseline$id)]
-
-# Scale for Suicidal Ideation items:
-## suicidal ideation (item 6)
-events$q06_ssi <- plf_data_baseline$q06_ssi[match(events$id, plf_data_baseline$id)]
-
-## suicidal expectation (item 15)
-events$q15_ssi <- plf_data_baseline$q15_ssi[match(events$id, plf_data_baseline$id)]
-
-## suicide method/opportunity access
-events$q13_ssi <- plf_data_baseline$q13_ssi[match(events$id, plf_data_baseline$id)]
-
-## suicide preparation
-events$q16_ssi <- plf_data_baseline$q16_ssi[match(events$id, plf_data_baseline$id)]
-
-# Perceived suicide-related coping scale
-events$srcs17 <- plf_data_baseline$srcs17[match(events$id, plf_data_baseline$id)]
-events$isi <- plf_data_baseline$isi[match(events$id, plf_data_baseline$id)]
-
-# Demographics
-events$age_demo <- plf_data_baseline$age_demo[match(events$id, plf_data_baseline$id)]
-events$sex_demo <- plf_data_baseline$sex_demo[match(events$id, plf_data_baseline$id)]
-events$race_demo <- plf_data_baseline$race_demo[match(events$id, plf_data_baseline$id)]
-events$latino_demo <- plf_data_baseline$latino_demo[match(events$id, plf_data_baseline$id)]
-events$degree_demo <- plf_data_baseline$degree_demo[match(events$id, plf_data_baseline$id)]
-events$employ_demo <- plf_data_baseline$employ_demo[match(events$id, plf_data_baseline$id)]
-events$marry_demo <- plf_data_baseline$marry_demo[match(events$id, plf_data_baseline$id)]
-events$prison_demo <- plf_data_baseline$prison_demo[match(events$id, plf_data_baseline$id)]
-events$prior_demo <- plf_data_baseline$prior_demo[match(events$id, plf_data_baseline$id)]
-
-# Major Depressive Episode info from the MINI
-events$when01p_mini <- plf_data_baseline$when01p_mini[match(events$id, plf_data_baseline$id)] # Past MDE
-events$when01c_mini <- plf_data_baseline$when01c_mini[match(events$id, plf_data_baseline$id)] # Current MDE
-events$when01r_mini <- plf_data_baseline$when01r_mini[match(events$id, plf_data_baseline$id)] # Recurrent MDE
+# Merge the datasets
+events <- left_join(events, plf_data_baseline, by = "id")
 ```
 
 # Filter the dataset for analysis
@@ -259,34 +264,11 @@ events_filtered <- events %>%
 
 # Filter to people who aren't missing the C-SSRS
 events_filtered <- events_filtered %>%
-  filter(!is.na(cssrs_actattlt_bl))
-
-# Look at MDE information
-table(events_filtered$when01p_mini) # Past
-table(events_filtered$when01r_mini) # Recurrent
-table(events_filtered$when01c_mini) # Current
-
-# Does everyone have a past, recurrent, or current MDE?
-sum(
-  events_filtered$when01c_mini == 0 &
-    events_filtered$when01r_mini == 0 &
-    events_filtered$when01p_mini == 0,
-  na.rm = TRUE
-) # Everyone had past (74), current (106), or recurrent (85) depression (but 10 people missing the MINI)
+  dplyr::filter(!is.na(cssrs_actattlt_bl))
 ```
 
 # Make new variables for analysis
 ```{r new vars}
-# BHS dichotomous variable; 9 and over = 1.
-events_filtered <- events_filtered %>%
-  mutate(bhs_9 = case_when(
-    is.na(bhs) ~ NA_integer_,
-    bhs >= 9 ~ 1,
-    bhs < 9 ~ 0
-  ))
-
-table(events_filtered$bhs_9)
-
 # Item 15 (Expectation for suicide)
 # Collapse 0 (no) and 1 (unsure) vs. 2 (sure)
 events_filtered$q15_ssi_2 <- ifelse(events_filtered$q15_ssi == 2, 1, 0)
@@ -297,17 +279,39 @@ table(events_filtered$q15_ssi)
 # Item 16 (preparation for suicide)
 # 0 (no preparation) vs. 1 (some preparation) and 2 (almost finished or completed preparation) collapsed
 events_filtered$q16_ssi_2 <- ifelse(events_filtered$q16_ssi %in% c(1, 2), 1,
-  ifelse(is.na(events_filtered$q13_ssi), NA, 0)
+  ifelse(is.na(events_filtered$q16_ssi), NA, 0)
 )
 
 # Item 13 (perceived access to method/opportunity for suicide)
 # No method + method/no opportunity vs. method and opportunity
 events_filtered$q13_ssi_2 <- ifelse(events_filtered$q13_ssi == 2, 1,
-  ifelse(is.na(events_filtered$q06_ssi), NA, 0)
+  ifelse(is.na(events_filtered$q13_ssi), NA, 0)
 )
+```
 
-table(events_filtered$q13_ssi)
-table(events_filtered$q13_ssi_2)
+# Death data
+```{r death data}
+# Look at deaths
+events_filtered %>%
+  filter(!is.na(dtdied))
+
+# [2025-10-03 Update after reviewing charts - 133 did not die (mistake on the PH site charts)]
+# 019 is death by suicide
+# 116 is not a death by suicide [accidental cocaine overdose or fatal cardiac arrhythmia provoked by drug]
+# 147 is a death by suicide
+# 152 died from COVID-19
+
+# Remove death code and date of death from 133
+
+events_filtered <- events_filtered %>%
+  mutate(
+    died = if_else(id == "PH-133", NA_integer_, died),
+    dtdied = if_else(id == "PH-133", NA_Date_, dtdied)
+  )
+
+# Confirm change
+events_filtered %>%
+  filter(!is.na(dtdied))
 ```
 
 # Truncate time-to-event to one year
@@ -321,7 +325,7 @@ sum(events_filtered$att1 == 1 & events_filtered$surv > 365, na.rm = TRUE)
 # Look at IDs of attempt #1 >365 days
 events_filtered %>%
   filter(att1 == 1 & surv > 365) %>%
-  pull(id) # BX-036
+  pull(id) 
 
 # Truncate time to 365 days
 # For the the one person that had their first attempt >365 days, change their attempt code from 1 to 0
@@ -370,7 +374,7 @@ events_filtered <- events_filtered %>%
 
 # Check the new numbers
 table(events_filtered$natts)
-table(events_filtered$natts_365) # One recurrent attempt was lost (and one emergent one from before)
+table(events_filtered$natts_365) # One recurrent attempt was lost (and one emergent)
 
 # Make a dichotomous variable for number of attempts; >1 = 1 and 1 and under = 0
 events_filtered$natts_di <- ifelse(events_filtered$natts_365 > 1, 1, 0)
@@ -383,60 +387,126 @@ events_filtered$natts_di_2 <- ifelse(is.na(events_filtered$natts_365), NA,
   )
 )
 
-# Who had less than 365 days of tracking?
+# Who had less than 365 days of tracking (that did not die)
 events_filtered %>%
-  filter(surv < 364, att1_365 == 0, died == 0)
+  filter(surv < 365, att1_365 == 0, is.na(events_filtered$dtdied))
 
-summary(events_filtered$surv[events_filtered$surv < 364 &
-  events_filtered$att1_365 == 0 &
-  events_filtered$died == 0])
+table(events_filtered$surv[events_filtered$surv_365 < 365 &
+                               events_filtered$att1_365 == 0 &
+                               is.na(events_filtered$dtdied)]) # 19
 
-table(events_filtered$surv[events_filtered$surv < 364 &
-  events_filtered$att1_365 == 0 &
-  events_filtered$died == 0])
+summary(events_filtered$surv[events_filtered$surv_365 < 365 &
+                               events_filtered$att1_365 == 0 &
+                               is.na(events_filtered$dtdied)]) 
+
+table(events_filtered$surv[events_filtered$surv_365 < 340 &
+                          events_filtered$att1_365 == 0 & 
+                          is.na(events_filtered$dtdied)]) # 3
+
+# Look at data for people < 340 days with no attempt and who did not die
+events_filtered %>%
+  filter(surv_365 < 340,
+         att1_365 == 0,
+         is.na(dtdied)) %>%
+  select(id, att1_365, surv_365, q15_ssi, q15_ssi_2)
+
+table(events_filtered$q15_ssi_2)
 ```
 
 # Make dataframes with participant death(s) removed
-```{r dth data}
-# Remove people who died with no emergent suicide attempt
+```{r dth dataframe}
+# Remove people who died with no suicide attempt over the study
 events_filtered_1 <- events_filtered %>%
-  filter(died != 1)
+  filter(!( !is.na(dtdied) & att1_365 == 0 ))
+events_filtered_1
 
 # Who was removed?
 events_filtered %>%
-  filter(died == 1) %>%
-  pull(id)
+  filter(!is.na(dtdied) & att1_365 == 0)
 
-# Remove people who died with and without an emergent suicide attempt
+# Remove people who died with and without a suicide attempt over the study
 events_filtered_2 <- events_filtered %>%
-  filter(is.na(dtdied))
+  filter(!( !is.na(dtdied)))
 
-# Who was removed?
-events_filtered %>%
-  filter(!is.na(dtdied)) %>%
-  pull(id)
-
-# Look at their data
 events_filtered %>%
   filter(!is.na(dtdied))
+```
 
-# Remove participants who had less then 340 days available and no emergent suicide attempt
-events_filtered_3 <- events_filtered_1 %>%
-  filter(!(died != 1 & surv_365 < 340 & att1_365 == 0))
+# Make dataframes with participants < 340 days + no suicide attempt removed
+```{r days missing dataframes}
+# Remove participants who had less then 340 days available and no suicide attempt over the study + those who died without a suicide attempt
+events_filtered_3 <- events_filtered_1 %>% # events_filtered_1 = people who died with no SA are already removed
+  filter(!(surv_365 < 340 & att1_365 == 0)) # 3 more participants
 
-# Remove participants who had less then 365 days available and no emergent suicide attempt
-events_filtered_4 <- events_filtered_1 %>%
-  filter(!(died != 1 & surv_365 < 365 & att1_365 == 0))
+# Who was removed?
+events_filtered_1 %>%
+  filter((surv_365 < 340 & att1_365 == 0)) 
+
+# Remove participants who had less then 365 days available and no suicide attempt over the study + those who died without a suicide attempt
+events_filtered_4 <- events_filtered_1 %>% # events_filtered_1 = people who died with no SA are already removed
+  filter(!(surv_365 < 365 & att1_365 == 0)) # 3 more participants
+
+# Who was removed?
+events_filtered_1 %>%
+  filter((surv_365 < 365 & att1_365 == 0)) 
 ```
 
 # Save the dataset
-```{r save}
+```{r save, eval=FALSE}
 write.csv(
   events_filtered,
   paste0("01_Output/Events_data_SG_", Sys.Date(), ".csv")
 )
 # 2025-06-15: First dataset
-# 2025-05-20: Added BHS subscales (positive & negative expectations separately)
-# 2025-07-22: Added perceived suicide-related coping
+# 2025-08-06: Add the whole plf baseline dataset
+# 2025-08-07: ...& add the whole CSSRS baseline dataset
+# 2025-08-24: Filter to those who had a lifetime suicide behavior
+# 2025-10-05: Correct mistaken chart data
+```
+
+# Scale reliability
+```{r scale rel}
+# Perceived suicide-related coping
+srcs_items <- events_filtered %>%
+  select(matches("^q\\d{2}_srcs$")) %>%
+  select(-matches("^q(02|07|15|21)_srcs$"))
+
+ltm::cronbach.alpha(srcs_items,
+  CI = TRUE,
+  na.rm = TRUE
+)
+
+# Beck Hopelessness Scale
+## Total
+bhs_items <- events_filtered %>%
+  select(matches("^q\\d{2}_bhs$"))
+
+ltm::cronbach.alpha(bhs_items,
+  CI = TRUE,
+  na.rm = TRUE
+)
+
+# negative expectations
+ltm::cronbach.alpha(
+  events_filtered[, c(
+    "q02_bhs", "q04_bhs", "q07_bhs",
+    "q09_bhs", "q11_bhs", "q12_bhs",
+    "q14_bhs", "q16_bhs", "q17_bhs",
+    "q18_bhs", "q20_bhs"
+  )],
+  CI = TRUE,
+  na.rm = TRUE
+)
+
+# Positive expectations
+ltm::cronbach.alpha(
+  events_filtered[, c(
+    "q01_bhs_r", "q03_bhs_r", "q05_bhs_r",
+    "q06_bhs_r", "q08_bhs_r", "q10_bhs_r",
+    "q13_bhs_r", "q15_bhs_r", "q19_bhs_r"
+  )],
+  CI = TRUE,
+  na.rm = TRUE
+)
 ```
 
