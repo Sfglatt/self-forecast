@@ -1,6 +1,5 @@
 ---
 title: "01_Data"
-author: "Sglatt"
 date: "`r Sys.Date()`"
 output: html_document
 ---
@@ -508,5 +507,11 @@ ltm::cronbach.alpha(
   CI = TRUE,
   na.rm = TRUE
 )
+```
+
+# citations
+```{r R cite}
+citation()
+RStudio.Version()
 ```
 
