@@ -179,25 +179,6 @@ events_filtered %>%
 
 ```
 
-# MSI-BPD demos
-```{r demo msi}
-# Threshold
-events_filtered %>%
-  group_by(q15_ssi_2, bpd) %>%
-  count(name = "Count") %>%
-  group_by(q15_ssi_2) %>%
-  mutate(Percent = round(100 * Count / sum(Count), 2)) %>%
-  ungroup()
-
-# Number of symptoms
-events_filtered %>%
-  group_by(q15_ssi_2, msibpd) %>%
-  count(name = "Count") %>%
-  group_by(q15_ssi_2) %>%
-  mutate(Percent = round(100 * Count / sum(Count), 2)) %>%
-  ungroup()
-```
-
 # Psychiatric comorbidity
 ```{r demo comorbid}
 # Variable for MDD + GAD + PTSD
@@ -209,44 +190,9 @@ events_filtered <- events_filtered %>%
     )
   )
 
-# Variable for MDD + GAD + PTSD + BPD symptoms
-events_filtered <- events_filtered %>%
-  mutate(
-    all_four_dx = if_else(
-      when01c_mini == 1 & mini03_mini == 1 & mini06_mini == 1 & bpd == 1,
-      1, 0, missing = NA_real_
-    )
-  )
-
 # How many people have MDE (current) + GAD + PTSD?
 events_filtered %>%
   group_by(q15_ssi_2, all_three_mini_dx) %>%
-  count(name = "Count") %>%
-  group_by(q15_ssi_2) %>%
-  mutate(Percent = round(100 * Count / sum(Count), 2)) %>%
-  ungroup()
-
-# How many people have MDE (current) + GAD + PTSD + BPD symptoms?
-events_filtered %>%
-  group_by(q15_ssi_2, all_four_dx) %>%
-  count(name = "Count") %>%
-  group_by(q15_ssi_2) %>%
-  mutate(Percent = round(100 * Count / sum(Count), 2)) %>%
-  ungroup()
-
-# How many people have MDE (current), GAD, PTSD, and/or BPD symptoms?
-events_filtered <- events_filtered %>%
-  mutate(
-    num_dx_1 = rowSums(across(c(when01c_mini, mini03_mini, mini06_mini, bpd), ~ . == 1)),
-    two_of_four_dx = if_else(
-      if_any(c(when01c_mini, mini03_mini, mini06_mini, bpd), is.na),
-      NA_real_,
-      if_else(num_dx_1 >= 2, 1, 0)
-    )
-  )
-
-events_filtered %>%
-  group_by(q15_ssi_2, two_of_four_dx) %>%
   count(name = "Count") %>%
   group_by(q15_ssi_2) %>%
   mutate(Percent = round(100 * Count / sum(Count), 2)) %>%

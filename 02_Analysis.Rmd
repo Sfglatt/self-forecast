@@ -17,10 +17,6 @@ if (!require("survminer")) {
   install.packages("survminer")
   require("survminer")
 }
-if (!require("ggfortify")) {
-  install.packages("ggfortify")
-  require("ggfortify")
-}
 if (!require("dplyr")) {
   install.packages("dplyr")
   require("dplyr")
@@ -29,21 +25,26 @@ if (!require("psych")) {
   install.packages("psych")
   require("psych")
 }
-if (!require("extrafont")) {
-  install.packages("extrafont")
-  require("extrafont")
+if (!require("sjPlot")) {
+  install.packages("sjPlot")
+  require("sjPlot")
 }
-# font_import(prompt = FALSE)
-# loadfonts(device = "win")
-# fonts()
+if (!require("report")) {
+  install.packages("report")
+  require("report")
+}
+```
+
+```{r dir}
+# Folder for the output
+if (!dir.exists("02_Output")) {
+  dir.create("02_Output")
+}
 ```
 
 # Import the dataset created in 01_Data
 ```{r data and dir, eval=FALSE}
 events_filtered <- read.csv("01_Output/Events_data_SG_2025-10-05.csv")
-
-# Folder to save the output
-# dir.create("02_Output")
 ```
 
 # Suicide descriptives for the sample
@@ -342,6 +343,8 @@ jmv::ttestIS(
   desc = TRUE
 )
 
+?ttestIS
+
 wilcox.test(bhs_pos ~ q15_ssi_2, data = events_filtered)
 
 # negative-expectation
@@ -466,25 +469,6 @@ cox_6a <- coxph(
   data = events_filtered
 )
 
-# kitchen sink model
-cox_7a <- coxph(
-  Surv(
-    surv_365, # Time-to-event, truncated at 365 days
-    att1_365
-  ) ~ # First suicidal behavior
-    factor(arm_rec) + # Randomization condition
-    factor(q15_ssi_2) + # Self rated expectation of a future suicide attempt (no/unsure vs. yes)
-    srcs17 + # Sucide Related Coping Scale sum score
-    bhs + # hopelessness sum
-    factor(q16_ssi_2) + # Preparation (no vs. some or full prep)
-    factor(q13_ssi_2) + # Perceived access to method/opportunity for suicide (no access to method and/or opp. vs. yes)
-    (attempt_recent == 1) + # Recent suicidal behavior (no vs yes)
-    factor(cssrs_actattrec_bl) + # actual attempt lifetime
-    bdi,
-  data = events_filtered
-)
-summary(cox_7a)
-
 # Main
 summary(cox_1a)
 
@@ -556,54 +540,8 @@ summary(cox_5b1)
 summary(cox_5b2)
 ```
 
-# Survival curve figure
-```{r survival fig }
-# Make a labeled self-rated expectation variable
-events_filtered <- events_filtered %>%
-  mutate(q15_ssi_label = factor(q15_ssi_2,
-    levels = c(0, 1),
-    labels = c("No/Unsure", "Yes")
-  ))
-
-# Survival curve with just self-rated expectation (labeled)
-cox_1a_fit <- survfit(
-  Surv(surv_365, att1_365) ~
-    q15_ssi_label,
-  data = events_filtered
-)
-
-# Make + save the figure
-tiff(paste0("02_Output/Survival_plot_", format(Sys.Date(), "%Y-%m-%d"), ".tiff"),
-  units = "in", width = 8, height = 5, res = 300
-)
-
-curves <- autoplot(
-  cox_1a_fit,
-  conf.int = FALSE,
-  censor.shape = "*",
-  censor.size = 5,
-  surv.size = 1.1,
-  facets = TRUE,
-  ncol = 2
-) +
-  labs(
-    x = "Time to suicide attempt",
-    y = "Survival",
-    color = "Expectation of a future suicide attempt"
-  ) +
-  coord_cartesian(ylim = c(0.25, 1)) +
-  theme_minimal(base_size = 14, base_family = "Times New Roman") +
-  theme(
-    panel.grid.major = element_line(color = "grey90"),
-    panel.grid.minor = element_line(color = "grey95"),
-    panel.background = element_rect(fill = "white"),
-    strip.background = element_rect(fill = "white"),
-    legend.position = "bottom"
-  )
-
-dev.off()
-
-curves
+# Citations
+```{r cites}
+report::report(sessionInfo())
 ```
-
 
